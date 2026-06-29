@@ -3,9 +3,9 @@ BooksSpider – Core crawler for books.toscrape.com
 
 Strategy
 --------
-1. Start at the homepage and discover all category links dynamically.
+1. Start at the homepage and randomly select 5 categories dynamically.
 2. For each category, collect every book URL (handling pagination).
-3. Randomly select exactly 5 book URLs from the full list.
+3. Randomly select exactly 5 books from the collected URLs.
 4. Visit each selected book detail page and yield a BookItem.
 
 Design decisions
@@ -18,23 +18,23 @@ Design decisions
 
 import logging
 import random
-from typing import Generator, Iterable
-from urllib.parse import urljoin
+from typing import Generator
 
 import scrapy
-from scrapy.http import HtmlResponse, Response
+from scrapy.http import HtmlResponse
 
 from books_scraper.items import BookItem
 
 logger = logging.getLogger(__name__)
 
 BOOKS_PER_CATEGORY: int = 5
+CATEGORIES_TO_SCRAPE: int = 5
 
 
 class BooksSpider(scrapy.Spider):
     """
-    Spider that crawls books.toscrape.com and extracts book data
-    from every category, selecting 5 random books per category.
+    Spider that crawls books.toscrape.com, randomly selects 5 categories,
+    and extracts 5 random books from each selected category.
     """
 
     name = "books"
@@ -62,10 +62,12 @@ class BooksSpider(scrapy.Spider):
             logger.error("No category links found – page structure may have changed.")
             return
 
-        category_links = random.sample(category_links, min(5, len(category_links)))
-        logger.info("Randomly selected %d categories to scrape", len(category_links))
+        selected_categories = random.sample(
+            category_links, min(CATEGORIES_TO_SCRAPE, len(category_links))
+        )
+        logger.info("Randomly selected %d categories to scrape", len(selected_categories))
 
-        for link in category_links:
+        for link in selected_categories:
             category_name = link.css("::text").get("").strip()
             category_url = response.urljoin(link.attrib["href"])
 
@@ -92,10 +94,9 @@ class BooksSpider(scrapy.Spider):
             book_urls:  Accumulated list of book URLs (grows across pages).
 
         Yields:
-            - Request to the next page (if pagination exists).
-            - Delegates to _select_and_scrape once all pages collected.
+            Request to the next page if pagination exists, otherwise
+            delegates to _select_and_scrape.
         """
-        # Each book article has an <h3><a href="..."> pointing to the detail page
         page_book_links = response.css("article.product_pod h3 a::attr(href)").getall()
         for href in page_book_links:
             book_urls.append(response.urljoin(href))
@@ -107,7 +108,6 @@ class BooksSpider(scrapy.Spider):
             response.url,
         )
 
-        # Follow 'next' pagination button if present
         next_page = response.css("li.next a::attr(href)").get()
         if next_page:
             yield scrapy.Request(
@@ -116,7 +116,6 @@ class BooksSpider(scrapy.Spider):
                 cb_kwargs={"category": category, "book_urls": book_urls},
             )
         else:
-            # All pages visited – proceed with random selection
             yield from self._select_and_scrape(category, book_urls)
 
     def _select_and_scrape(
@@ -128,7 +127,7 @@ class BooksSpider(scrapy.Spider):
         Randomly select up to BOOKS_PER_CATEGORY URLs and request detail pages.
 
         If a category has fewer books than BOOKS_PER_CATEGORY, all books
-        are scraped (no error – edge case handled gracefully).
+        are scraped without error.
 
         Args:
             category:  Human-readable category name.
@@ -141,18 +140,11 @@ class BooksSpider(scrapy.Spider):
         sample_size = min(BOOKS_PER_CATEGORY, total)
         selected = random.sample(book_urls, sample_size)
 
-        # logger.info(
-        #     "Category '%s': %d books found, selected %d",
-        #     category,
-        #     total,
-        #     sample_size,
-        # )
-
         logger.info(
-              "Category '%s': %d books found, randomly selected %d for scraping",
-               category,
-               total,
-               sample_size,
+            "Category '%s': %d books found, randomly selected %d for scraping",
+            category,
+            total,
+            sample_size,
         )
 
         for url in selected:
@@ -162,7 +154,7 @@ class BooksSpider(scrapy.Spider):
                 cb_kwargs={"category": category},
             )
 
-    def _parse_book(self, response: HtmlResponse, category: str) -> BookItem:
+    def _parse_book(self, response: HtmlResponse, category: str) -> Generator:
         """
         Extract all required fields from a book detail page.
 
