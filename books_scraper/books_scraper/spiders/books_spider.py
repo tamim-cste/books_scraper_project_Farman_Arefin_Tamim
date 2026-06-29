@@ -45,24 +45,25 @@ class BooksSpider(scrapy.Spider):
         """
         Entry point – parse the homepage and dispatch category crawls.
 
-        Discovers all category links from the left-hand navigation sidebar.
+        Discovers all category links from the left-hand navigation sidebar,
+        then randomly selects 5 categories to scrape.
 
         Args:
             response: Scrapy response for the homepage.
 
         Yields:
-            Scrapy Request objects for each category page.
+            Scrapy Request objects for each selected category page.
         """
-        # Category links live in the sidebar nav under .side_categories ul
-        category_links = response.css(
+        category_links = list(response.css(
             "div.side_categories ul li ul li a"
-        )
+        ))
 
         if not category_links:
             logger.error("No category links found – page structure may have changed.")
             return
 
-        logger.info("Discovered %d categories", len(category_links))
+        category_links = random.sample(category_links, min(5, len(category_links)))
+        logger.info("Randomly selected %d categories to scrape", len(category_links))
 
         for link in category_links:
             category_name = link.css("::text").get("").strip()
@@ -140,11 +141,18 @@ class BooksSpider(scrapy.Spider):
         sample_size = min(BOOKS_PER_CATEGORY, total)
         selected = random.sample(book_urls, sample_size)
 
+        # logger.info(
+        #     "Category '%s': %d books found, selected %d",
+        #     category,
+        #     total,
+        #     sample_size,
+        # )
+
         logger.info(
-            "Category '%s': %d books found, selected %d",
-            category,
-            total,
-            sample_size,
+              "Category '%s': %d books found, randomly selected %d for scraping",
+               category,
+               total,
+               sample_size,
         )
 
         for url in selected:
