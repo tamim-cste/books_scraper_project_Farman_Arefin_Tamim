@@ -16,6 +16,7 @@ done
 echo ">>> Scrapyd is up."
 
 echo ">>> Deploying project egg..."
+cd /app/books_scraper
 scrapyd-deploy local -p books_scraper
 
 echo ">>> Scheduling spider..."

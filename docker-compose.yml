@@ -1,0 +1,35 @@
+services:
+  scrapyd:
+    build: .
+    container_name: books_scrapyd
+    ports:
+      - "6800:6800"
+    volumes:
+      - ./output:/app/output
+      - ./logs:/app/logs
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+
+  deployer:
+    build: .
+    container_name: books_deployer
+    depends_on:
+      - scrapyd
+    entrypoint: ["/bin/sh", "-c"]
+    command: |
+      echo 'Waiting for Scrapyd to start...'
+      until curl -s http://scrapyd:6800/daemonstatus.json > /dev/null 2>&1; do
+        sleep 1
+      done
+      echo 'Deploying project...'
+      cd /app/books_scraper
+      scrapyd-deploy local -p books_scraper
+      echo 'Scheduling spider...'
+      curl -s http://scrapyd:6800/schedule.json \
+        -d project=books_scraper \
+        -d spider=books
+      echo 'Spider scheduled successfully.'
+    volumes:
+      - ./output:/app/output
+      - ./logs:/app/logs

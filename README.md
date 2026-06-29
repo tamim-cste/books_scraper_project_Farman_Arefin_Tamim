@@ -15,8 +15,8 @@ Scrapy project that crawls [books.toscrape.com](https://books.toscrape.com), cle
 git clone https://github.com/tamim-cste/books_scraper_project_Farman_Arefin_Tamim
 cd books_scraper_project_Farman_Arefin_Tamim
 
-python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
+python3 -m venv venv
+source venv/bin/activate  # Windows: .venv\Scripts\activate
 
 pip install -r requirements.txt
 mkdir -p output logs database
